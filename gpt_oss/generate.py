@@ -49,7 +49,7 @@ if __name__ == "__main__":
         "--prompt",
         metavar="PROMPT",
         type=str,
-        default="How are you?",
+        default="The capital of France is",
         help="LLM prompt",
     )
     parser.add_argument(
