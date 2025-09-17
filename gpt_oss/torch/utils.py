@@ -25,16 +25,10 @@ def init_distributed() -> torch.device:
     rank = int(os.environ.get("RANK", 0))
     if world_size > 1:
         dist.init_process_group(
-            backend="nccl", init_method="env://", world_size=world_size, rank=rank
+            backend="gloo", init_method="env://", world_size=world_size, rank=rank
         )
     # torch.cuda.set_device(rank)
     device = torch.device("cpu")
-
-    # Warm up NCCL to avoid first-time latency
-    if world_size > 1:
-        x = torch.ones(1, device=device)
-        dist.all_reduce(x)
-        torch.cuda.synchronize(device)
 
     suppress_output(rank)
     return device
