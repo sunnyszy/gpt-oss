@@ -5,8 +5,28 @@ from dataclasses import dataclass
 
 import torch
 import torch.distributed as dist
-
 from gpt_oss.torch.weights import Checkpoint
+
+
+log_filename = "/shared/zhenyus/workplace/NeuronPyExps/reference_new.json"
+if os.path.exists(log_filename):
+    os.remove(log_filename)
+
+def log_to_json(k ,v):
+    """Log data to a JSON file"""
+    # Append to existing log file or create new one
+    log = {}
+    if os.path.exists(log_filename):
+        try:
+            with open(log_filename, "r") as f:
+                log = json.load(f)
+        except (json.JSONDecodeError, ValueError):
+            log = {}
+    
+    log[k] = v
+    
+    with open(log_filename, "w") as f:
+        json.dump(log, f, indent=2, default=str)
 
 
 @dataclass
@@ -260,9 +280,11 @@ class MLPBlock(torch.nn.Module):
     def __init__(
         self,
         config: ModelConfig,
+        layer_idx: int,
         device: torch.device | None = None,
     ):
         super().__init__()
+        self.layer_idx = layer_idx
         self.num_experts = config.num_experts
         self.experts_per_token = config.experts_per_token
         self.swiglu_limit = config.swiglu_limit
@@ -311,10 +333,13 @@ class MLPBlock(torch.nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         t = self.norm(x)
+        log_to_json(f"{self.layer_idx}_normed_moe_input", t.float().numpy().tolist())
         g = self.gate(t)
         experts = torch.topk(g, k=self.experts_per_token, dim=-1, sorted=True)
         expert_weights = torch.nn.functional.softmax(experts.values, dim=1)
         expert_indices = experts.indices
+        log_to_json(f"{self.layer_idx}_expert_indices", expert_indices.int().numpy().tolist())
+        log_to_json(f"{self.layer_idx}_expert_weights", expert_weights.float().numpy().tolist())
 
         # MLP #1
         mlp1_weight = self.mlp1_weight[expert_indices, ...]
@@ -346,11 +371,13 @@ class TransformerBlock(torch.nn.Module):
         super().__init__()
         self.layer_idx = layer_idx
         self.attn = AttentionBlock(config, layer_idx, device)
-        self.mlp = MLPBlock(config, device)
+        self.mlp = MLPBlock(config, layer_idx, device)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.attn(x)
+        log_to_json(f"{self.layer_idx}_attn_out", x.float().numpy().tolist())
         x = self.mlp(x)
+        log_to_json(f"{self.layer_idx}_moe_out", x.float().numpy().tolist())
         return x
 
 

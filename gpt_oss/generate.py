@@ -34,6 +34,8 @@ def main(args):
         print(
             f"Generated token: {repr(decoded_token)}, logprob: {logprob}"
         )
+        import sys
+        sys.exit(0)
 
 
 if __name__ == "__main__":
